@@ -463,3 +463,62 @@ input[type="range"] { flex: 1; }
   .panel { padding: 0.75rem; }
   .stage-wrap { width: 100%; }
 }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 10, 0.65);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 100;
+}
+.modal-backdrop.open { display: flex; }
+
+.modal {
+  background: #10141c;
+  border: 1px solid #232937;
+  border-radius: 10px;
+  padding: 1.25rem;
+  width: min(440px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.modal h3 { margin: 0; font-size: 1.05rem; }
+.modal fieldset {
+  border: 1px solid #232937;
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.modal legend {
+  padding: 0 0.3rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9aa4b2;
+}
+.modal fieldset label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: #e6e6e6;
+  cursor: pointer;
+}
+.modal fieldset label input { margin-top: 0.2rem; }
+.modal fieldset label span { display: block; }
+.modal fieldset label strong { font-size: 0.85rem; }
+.modal fieldset label br + em,
+.modal fieldset label em { color: #9aa4b2; font-size: 0.78rem; font-style: normal; }
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

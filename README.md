@@ -81,14 +81,24 @@ annotation across the whole stack, sortable by slice order, type, or
 title (A–Z / Z–A); clicking an entry jumps straight to its slice and
 opens it in the inspector.
 
-Annotations autosave to the browser's local storage as you work, and
-**Export annotations** downloads everything as a single
-`annotations.json` (schema below) for the quiz tool to consume;
-**Import…** loads one back in.
+Annotations autosave to the browser's local storage as you work.
+**Export annotations** first asks what the export is for, then
+downloads a single `annotations.json` (schema below) for the quiz
+tool to consume; **Import…** loads one back in for further editing.
+
+- **Quiz vs. showcase** — Quiz: students place the features themselves
+  and get checked. Showcase: a read-only walkthrough of the annotated
+  slices (no placing, everything is already shown).
+- **Quiz mode** (quiz exports only) — **Full challenge**: students
+  must find both the right slice and the right spot. **Guided**:
+  students are shown which slice each feature is on (via small markers
+  on the quiz tool's slider) and only need to find the right spot.
 
 ```jsonc
 {
-  "version": 1,
+  "version": 2,
+  "exportMode": "quiz", // or "showcase"
+  "quizMode": "guided", // "full" | "guided" - only present when exportMode is "quiz"
   "dataset": { "size": 400, "sliceCount": 40, "axis": "height, bottom to top" },
   "annotations": [
     { "id": "…", "type": "label", "sliceIndex": 18, "layer": "core", "x": 0.5, "y": 0.5, "text": "Core",
@@ -107,3 +117,35 @@ Annotations autosave to the browser's local storage as you work, and
 `x`/`y` (and polygon point coordinates) are fractions (0–1) of the
 slice image, so positions stay correct regardless of display size.
 `tolerance.radius` is also a fraction of the image width.
+
+## Quiz (`quiz/`)
+
+The student-facing tool. Loads `quiz/annotations.json` (a static file
+next to the page — replace it with your own export from the
+annotator) by default, or **Import…** a different one on the fly.
+Works the same across desktop, iPad and phones as the annotator.
+
+**Showcase files** render read-only: a sortable "All annotations" list
+(slice order / type / title A–Z / Z–A) navigates to each feature's
+slice and shows its full content — for MCQs, every option is shown
+with the correct one highlighted.
+
+**Quiz files** show a "To place" list built from each annotation's
+public-safe prompt (a label's text, a pin's title, an MCQ's question +
+options) — never its slice or position. Tap an item (it "arms"), then
+tap the slice where you think it belongs — or press-and-drag it onto
+the stage, same as the annotator's palette. MCQs also get a dropdown
+to pick an answer. Placed items can be dragged to reposition, or
+re-opened from the list to review or clear. In **guided** exports,
+small dots below the slider hint which slice each item belongs to
+(the currently-selected item's dot is highlighted); a separate row of
+dots always shows which slices you've placed something on, regardless
+of mode.
+
+Status icons in the list track each item: empty ring (not placed),
+filled dot (placed, not yet checked), green check / red cross (graded).
+**Check my answers** grades every item at once — correct requires the
+right slice *and* landing inside the annotation's acceptable range
+(circle or custom polygon), plus the right dropdown choice for MCQs —
+and reveals the true location/content for anything attempted. **Try
+again** clears every placement and re-attempts from scratch.

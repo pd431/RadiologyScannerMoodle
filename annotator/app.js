@@ -762,6 +762,91 @@
     wireInspector(ann);
   }
 
+  // --- export (with quiz/showcase prompt) ---------------------------------------
+
+  function downloadAnnotations(exportMode, quizMode) {
+    const payload = {
+      version: 2,
+      exportMode,
+      ...(exportMode === "quiz" ? { quizMode } : {}),
+      dataset: {
+        size: state.manifest.size,
+        sliceCount: state.manifest.sliceCount,
+        axis: state.manifest.axis,
+      },
+      annotations: state.annotations,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "annotations.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function openExportModal() {
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop open";
+    backdrop.innerHTML = `
+      <div class="modal">
+        <h3>Export annotations</h3>
+        <fieldset>
+          <legend>What are you exporting this for?</legend>
+          <label><input type="radio" name="exportMode" value="quiz" checked />
+            <span><strong>Quiz</strong><br />Students place features themselves and get checked.</span>
+          </label>
+          <label><input type="radio" name="exportMode" value="showcase" />
+            <span><strong>Showcase</strong><br />Read-only walkthrough of the annotated slices.</span>
+          </label>
+        </fieldset>
+        <fieldset id="quizModeFieldset">
+          <legend>How much should students be told?</legend>
+          <label><input type="radio" name="quizMode" value="full" checked />
+            <span><strong>Full challenge</strong><br />Find the right slice <em>and</em> the right spot.</span>
+          </label>
+          <label><input type="radio" name="quizMode" value="guided" />
+            <span><strong>Guided</strong><br />Shown which slice each feature is on, only need to find the spot.</span>
+          </label>
+        </fieldset>
+        <div class="modal-actions">
+          <button id="exportCancelBtn">Cancel</button>
+          <button id="exportDownloadBtn">Download</button>
+        </div>
+      </div>`;
+    document.body.appendChild(backdrop);
+
+    const quizModeFieldset = backdrop.querySelector("#quizModeFieldset");
+    backdrop.querySelectorAll('input[name="exportMode"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        if (!radio.checked) return;
+        quizModeFieldset.style.display = radio.value === "quiz" ? "" : "none";
+      });
+    });
+
+    const close = () => {
+      backdrop.remove();
+      document.removeEventListener("keydown", onKey);
+    };
+    function onKey(e) {
+      if (e.key === "Escape") close();
+    }
+    backdrop.querySelector("#exportCancelBtn").addEventListener("click", close);
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) close();
+    });
+    document.addEventListener("keydown", onKey);
+
+    backdrop.querySelector("#exportDownloadBtn").addEventListener("click", () => {
+      const exportMode = backdrop.querySelector('input[name="exportMode"]:checked').value;
+      const quizMode = backdrop.querySelector('input[name="quizMode"]:checked').value;
+      downloadAnnotations(exportMode, exportMode === "quiz" ? quizMode : undefined);
+      close();
+    });
+  }
+
   // --- import / export / clear -------------------------------------------------
 
   function wireGlobalControls() {
@@ -788,26 +873,7 @@
 
     sortOrderEl.addEventListener("change", renderGlobalList);
 
-    exportBtn.addEventListener("click", () => {
-      const payload = {
-        version: 1,
-        dataset: {
-          size: state.manifest.size,
-          sliceCount: state.manifest.sliceCount,
-          axis: state.manifest.axis,
-        },
-        annotations: state.annotations,
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "annotations.json";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    });
+    exportBtn.addEventListener("click", openExportModal);
 
     importBtn.addEventListener("click", () => importFile.click());
 
