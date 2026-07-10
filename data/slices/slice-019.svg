@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <circle cx="200.0" cy="200.0" r="195.0" fill="#0d1117" stroke="#30363d" stroke-width="2" />
+  <polygon data-layer="outer" points="288.17,78.65 349.18,215.68 261.01,337.03 111.83,321.35 50.82,184.32 138.99,62.97" fill="#3b6ea5" fill-opacity="0.35" stroke="#204a72" stroke-width="2" stroke-linejoin="round" />
+  <polygon data-layer="mid" points="123.14,144.16 255.84,123.14 276.86,255.84 144.16,276.86" fill="#4c9a72" fill-opacity="0.45" stroke="#2c6b4a" stroke-width="2" stroke-linejoin="round" />
+  <polygon data-layer="core" points="245.00,200.00 177.50,238.97 177.50,161.03" fill="#b5533c" fill-opacity="0.55" stroke="#833a29" stroke-width="2" stroke-linejoin="round" />
+  <circle data-layer="landmark" cx="200.0" cy="25.0" r="6" fill="#e8b93a" stroke="#8a6a10" stroke-width="1.5" />
+</svg>
