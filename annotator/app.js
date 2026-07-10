@@ -24,6 +24,8 @@
   const exportBtn = el("exportBtn");
   const clearBtn = el("clearBtn");
   const inspectorEl = el("inspector");
+  const paletteHintEl = el("paletteHint");
+  const PALETTE_HINT_DEFAULT = paletteHintEl.textContent;
 
   const state = {
     manifest: null,
@@ -31,6 +33,7 @@
     annotations: [],
     selectedId: null,
     drawing: null, // { annId, points: [{x,y}] }
+    armedType: null, // palette type staged for tap-to-place (touch-friendly path)
     playing: false,
     playTimer: null,
   };
@@ -164,6 +167,7 @@
     state.selectedId = id;
     state.drawing = null;
     stage.classList.remove("drawing-mode");
+    setArmed(null);
     renderInspector();
     renderMarkers();
     renderToleranceOverlay();
@@ -176,6 +180,7 @@
     state.selectedId = null;
     state.drawing = null;
     stage.classList.remove("drawing-mode");
+    setArmed(null);
     renderInspector();
     renderMarkers();
     renderToleranceOverlay();
@@ -232,7 +237,7 @@
       const onMove = (moveEvt) => {
         const dx = moveEvt.clientX - startX;
         const dy = moveEvt.clientY - startY;
-        if (!dragging && Math.hypot(dx, dy) > 4) dragging = true;
+        if (!dragging && Math.hypot(dx, dy) > 8) dragging = true;
         if (!dragging) return;
         const rect = stage.getBoundingClientRect();
         pendingX = clamp((moveEvt.clientX - rect.left) / rect.width, 0, 1);
@@ -307,42 +312,118 @@
     toleranceLayer.innerHTML = parts.join("");
   }
 
-  // --- palette drag / drop ----------------------------------------------------
+  // --- palette placement: drag-and-drop (mouse) or tap-to-arm (touch) --------
+  //
+  // Native HTML5 drag-and-drop does not work on touch browsers (notably iOS
+  // Safari), so placement is driven entirely by Pointer Events instead: a
+  // press-and-move on a palette item drags a ghost chip onto the stage
+  // (works with mouse, pen and touch alike); a plain tap "arms" that type so
+  // the next tap on the stage places it there, which is far more reliable on
+  // a scrolling touch layout than a long drag gesture.
+
+  function isPointInRect(x, y, rect) {
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }
+
+  function setArmed(type) {
+    state.armedType = type;
+    document.querySelectorAll(".palette-item").forEach((item) => {
+      item.classList.toggle("armed", item.dataset.type === type);
+    });
+    stage.classList.toggle("armed-mode", !!type);
+    paletteHintEl.textContent = type
+      ? `Tap the slice to place a ${TYPE_LABELS[type]}. Tap the tool again to cancel.`
+      : PALETTE_HINT_DEFAULT;
+  }
+
+  function placeAnnotation(type, clientX, clientY, rect) {
+    const x = clamp((clientX - rect.left) / rect.width, 0, 1);
+    const y = clamp((clientY - rect.top) / rect.height, 0, 1);
+    const layer = layerAtPoint(clientX, clientY, null);
+
+    const ann = createDefaultAnnotation(type, x, y, layer);
+    state.annotations.push(ann);
+    persist();
+    renderMarkers();
+    renderToleranceOverlay();
+    renderAnnotationList();
+    renderGlobalList();
+    selectAnnotation(ann.id);
+  }
+
+  function createGhost(type) {
+    const ghost = document.createElement("div");
+    ghost.className = "drag-ghost";
+    ghost.textContent = TYPE_LABELS[type];
+    document.body.appendChild(ghost);
+    return ghost;
+  }
+
+  function positionGhost(ghost, x, y) {
+    ghost.style.left = `${x}px`;
+    ghost.style.top = `${y}px`;
+  }
+
+  function beginPaletteInteraction(item, downEvent) {
+    if (state.drawing) {
+      cancelDrawing();
+      renderInspector();
+      renderToleranceOverlay();
+    }
+
+    const type = item.dataset.type;
+    const startX = downEvent.clientX;
+    const startY = downEvent.clientY;
+    let dragging = false;
+    let ghost = null;
+
+    item.setPointerCapture(downEvent.pointerId);
+
+    const cleanup = () => {
+      item.removeEventListener("pointermove", onMove);
+      item.removeEventListener("pointerup", onUp);
+      item.removeEventListener("pointercancel", onCancel);
+      stage.classList.remove("drag-over");
+      if (ghost) ghost.remove();
+    };
+
+    const onMove = (e) => {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!dragging && Math.hypot(dx, dy) > 10) {
+        dragging = true;
+        setArmed(null);
+        ghost = createGhost(type);
+      }
+      if (!dragging) return;
+      positionGhost(ghost, e.clientX, e.clientY);
+      stage.classList.toggle("drag-over", isPointInRect(e.clientX, e.clientY, stage.getBoundingClientRect()));
+    };
+
+    const onUp = (e) => {
+      cleanup();
+      if (dragging) {
+        const rect = stage.getBoundingClientRect();
+        if (isPointInRect(e.clientX, e.clientY, rect)) placeAnnotation(type, e.clientX, e.clientY, rect);
+      } else {
+        setArmed(state.armedType === type ? null : type);
+      }
+    };
+
+    const onCancel = () => cleanup();
+
+    item.addEventListener("pointermove", onMove);
+    item.addEventListener("pointerup", onUp);
+    item.addEventListener("pointercancel", onCancel);
+  }
 
   function wirePalette() {
     document.querySelectorAll(".palette-item").forEach((item) => {
-      item.addEventListener("dragstart", (e) => {
-        e.dataTransfer.setData("text/plain", item.dataset.type);
-        e.dataTransfer.effectAllowed = "copy";
+      item.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        e.preventDefault();
+        beginPaletteInteraction(item, e);
       });
-    });
-
-    stage.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-      stage.classList.add("drag-over");
-    });
-    stage.addEventListener("dragleave", () => stage.classList.remove("drag-over"));
-
-    stage.addEventListener("drop", (e) => {
-      e.preventDefault();
-      stage.classList.remove("drag-over");
-      const type = e.dataTransfer.getData("text/plain");
-      if (!TYPE_LABELS[type]) return;
-
-      const rect = stage.getBoundingClientRect();
-      const x = clamp((e.clientX - rect.left) / rect.width, 0, 1);
-      const y = clamp((e.clientY - rect.top) / rect.height, 0, 1);
-      const layer = layerFromEventTarget(e.target);
-
-      const ann = createDefaultAnnotation(type, x, y, layer);
-      state.annotations.push(ann);
-      persist();
-      renderMarkers();
-      renderToleranceOverlay();
-      renderAnnotationList();
-      renderGlobalList();
-      selectAnnotation(ann.id);
     });
 
     stage.addEventListener("click", (e) => {
@@ -354,6 +435,13 @@
         const ann = state.annotations.find((a) => a.id === state.drawing.annId);
         rebuildToleranceControls(ann);
         renderToleranceOverlay();
+        return;
+      }
+      if (state.armedType) {
+        if (e.target.closest(".marker")) return;
+        const rect = stage.getBoundingClientRect();
+        placeAnnotation(state.armedType, e.clientX, e.clientY, rect);
+        setArmed(null);
         return;
       }
       if (state.selectedId && !e.target.closest(".marker")) {
@@ -766,6 +854,8 @@
         cancelDrawing();
         renderInspector();
         renderToleranceOverlay();
+      } else if (state.armedType) {
+        setArmed(null);
       } else if (state.selectedId) {
         deselectAnnotation();
       }

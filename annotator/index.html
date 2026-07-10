@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Annotator</title>
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -21,23 +22,23 @@
     <aside class="side-panel panel">
       <section>
         <h2>Add annotation</h2>
-        <p class="hint">Drag a type onto the slice, then drop it on the feature you want to mark.</p>
+        <p class="hint" id="paletteHint">Drag a type onto the slice and drop it on the feature you want to mark — or on touch, tap a type then tap the slice.</p>
         <div class="palette">
-          <div class="palette-item" draggable="true" data-type="label">
+          <div class="palette-item" data-type="label">
             <span class="icon label"></span>
             <div>
               <strong>Text label</strong>
               <span>Short label shown right on the image</span>
             </div>
           </div>
-          <div class="palette-item" draggable="true" data-type="pin">
+          <div class="palette-item" data-type="pin">
             <span class="icon pin">i</span>
             <div>
               <strong>Pin + description</strong>
               <span>Marker with a longer write-up</span>
             </div>
           </div>
-          <div class="palette-item" draggable="true" data-type="mcq">
+          <div class="palette-item" data-type="mcq">
             <span class="icon mcq">?</span>
             <div>
               <strong>MCQ</strong>

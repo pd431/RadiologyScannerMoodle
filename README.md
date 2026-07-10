@@ -43,8 +43,12 @@ to scrub through the generated stack.
 
 ## Annotator (`annotator/`)
 
-The educator-facing tool. Scrub through the slice stack and drag one of
-three annotation types out of the palette onto the slice:
+The educator-facing tool. Works on desktop, iPad and phones — the
+layout collapses to a single column below ~1100px, and touch targets
+grow on touchscreens. Scrub through the slice stack and add one of
+three annotation types from the palette onto the slice: drag-and-drop
+with a mouse, or on touch, tap a type (it "arms") then tap the slice
+to place it.
 
 - **Text label** — a short string shown right on the image.
 - **Pin + description** — a marker with a longer write-up (visible on
