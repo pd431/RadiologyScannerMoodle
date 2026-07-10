@@ -55,10 +55,30 @@ three annotation types out of the palette onto the slice:
 
 Wherever an annotation is dropped, its `layer` is auto-detected from
 the `data-layer` attribute of the SVG shape under the cursor (skin,
-flesh, core, seed, stem, calyx) — no manual tagging needed. Existing
-markers can be dragged to reposition (a plain click reopens the editor
-instead). Annotations autosave to the browser's local storage as you
-work, and **Export annotations** downloads everything as a single
+flesh, core, seed, stem, calyx) — no manual tagging needed. Clicking an
+existing marker (or a list entry) opens it in the **inspector** panel
+on the right, where every field is live-bound — no separate save step.
+Markers can be dragged to reposition (a plain click opens the
+inspector instead; dragging re-detects the layer on release).
+
+Every annotation also carries an **acceptable range** — the tolerance
+the quiz tool will use to judge a student's placement as correct. The
+inspector's "Acceptable range" section offers two modes:
+
+- **Radius** (default, quick) — a slider sets a tolerance circle
+  centred on the pin, shown live on the slice.
+- **Custom shape** — click "Draw shape" and click points directly on
+  the slice to trace an arbitrary polygon (doesn't need to be centred
+  on, or even touch, the pin); "Finish shape" needs at least 3 points,
+  "Undo point"/"Cancel" are also available.
+
+The **All annotations** panel (left sidebar, expandable) lists every
+annotation across the whole stack, sortable by slice order, type, or
+title (A–Z / Z–A); clicking an entry jumps straight to its slice and
+opens it in the inspector.
+
+Annotations autosave to the browser's local storage as you work, and
+**Export annotations** downloads everything as a single
 `annotations.json` (schema below) for the quiz tool to consume;
 **Import…** loads one back in.
 
@@ -67,15 +87,19 @@ work, and **Export annotations** downloads everything as a single
   "version": 1,
   "dataset": { "size": 400, "sliceCount": 40, "axis": "height, bottom to top" },
   "annotations": [
-    { "id": "…", "type": "label", "sliceIndex": 18, "layer": "core", "x": 0.5, "y": 0.5, "text": "Core" },
+    { "id": "…", "type": "label", "sliceIndex": 18, "layer": "core", "x": 0.5, "y": 0.5, "text": "Core",
+      "tolerance": { "mode": "radius", "radius": 0.06 } },
     { "id": "…", "type": "pin", "sliceIndex": 18, "layer": "flesh", "x": 0.28, "y": 0.5,
-      "title": "Flesh", "description": "…" },
+      "title": "Flesh", "description": "…",
+      "tolerance": { "mode": "radius", "radius": 0.2 } },
     { "id": "…", "type": "mcq", "sliceIndex": 18, "layer": "flesh", "x": 0.5, "y": 0.38,
       "question": "What condition does this point to?",
-      "options": ["Rot", "Bite mark", "Healthy apple"], "answer": "Healthy apple" }
+      "options": ["Rot", "Bite mark", "Healthy apple"], "answer": "Healthy apple",
+      "tolerance": { "mode": "polygon", "polygon": [{ "x": 0.42, "y": 0.35 }, { "x": 0.58, "y": 0.35 }, { "x": 0.58, "y": 0.55 }, { "x": 0.42, "y": 0.55 }] } }
   ]
 }
 ```
 
-`x`/`y` are fractions (0–1) of the slice image, so positions stay
-correct regardless of display size.
+`x`/`y` (and polygon point coordinates) are fractions (0–1) of the
+slice image, so positions stay correct regardless of display size.
+`tolerance.radius` is also a fraction of the image width.

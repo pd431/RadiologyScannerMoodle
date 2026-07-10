@@ -18,7 +18,7 @@
   </header>
 
   <main>
-    <aside class="side-panel">
+    <aside class="side-panel panel">
       <section>
         <h2>Add annotation</h2>
         <p class="hint">Drag a type onto the slice, then drop it on the feature you want to mark.</p>
@@ -53,7 +53,19 @@
       </section>
 
       <section>
-        <h2>All slices <span class="count" id="totalAnnCount">0</span></h2>
+        <details id="allAnnDetails">
+          <summary>All annotations <span class="count" id="totalAnnCount">0</span></summary>
+          <div class="all-ann-controls">
+            <label for="sortOrder">Sort by</label>
+            <select id="sortOrder">
+              <option value="slice">Slice order</option>
+              <option value="type">Type</option>
+              <option value="title-asc">Title A–Z</option>
+              <option value="title-desc">Title Z–A</option>
+            </select>
+          </div>
+          <ul class="annotation-list" id="allAnnotationList"></ul>
+        </details>
       </section>
     </aside>
 
@@ -61,6 +73,7 @@
       <div class="stage-wrap">
         <div class="stage" id="stage">
           <div class="svg-host" id="svgHost"></div>
+          <svg class="tolerance-layer" id="toleranceLayer" viewBox="0 0 400 400"></svg>
           <div class="marker-layer" id="markerLayer"></div>
         </div>
       </div>
@@ -70,11 +83,11 @@
         <span class="readout" id="readout">1 / ?</span>
       </div>
     </section>
-  </main>
 
-  <div class="modal-backdrop" id="modalBackdrop">
-    <div class="modal" id="modal"></div>
-  </div>
+    <aside class="inspector panel" id="inspector">
+      <p class="hint placeholder">Select an annotation on the slice, or drag a new one from the palette, to edit it here.</p>
+    </aside>
+  </main>
 
   <script src="app.js"></script>
 </body>

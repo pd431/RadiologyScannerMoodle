@@ -1,12 +1,14 @@
 (() => {
   const MANIFEST_URL = "../data/slices/manifest.json";
   const SLICE_URL = (filename) => `../data/slices/${filename}`;
-  const STORAGE_KEY = "annotator:apple:v1";
+  const STORAGE_KEY = "annotator:apple:v2";
   const TYPE_LABELS = { label: "Text label", pin: "Pin + description", mcq: "MCQ" };
+  const DEFAULT_TOLERANCE = { mode: "radius", radius: 0.06 };
 
   const el = (id) => document.getElementById(id);
   const stage = el("stage");
   const svgHost = el("svgHost");
+  const toleranceLayer = el("toleranceLayer");
   const markerLayer = el("markerLayer");
   const scrub = el("scrub");
   const playBtn = el("play");
@@ -15,17 +17,20 @@
   const annotationListEl = el("annotationList");
   const sliceAnnCountEl = el("sliceAnnCount");
   const totalAnnCountEl = el("totalAnnCount");
+  const allAnnotationListEl = el("allAnnotationList");
+  const sortOrderEl = el("sortOrder");
   const importBtn = el("importBtn");
   const importFile = el("importFile");
   const exportBtn = el("exportBtn");
   const clearBtn = el("clearBtn");
-  const modalBackdrop = el("modalBackdrop");
-  const modal = el("modal");
+  const inspectorEl = el("inspector");
 
   const state = {
     manifest: null,
     currentIndex: 1,
     annotations: [],
+    selectedId: null,
+    drawing: null, // { annId, points: [{x,y}] }
     playing: false,
     playTimer: null,
   };
@@ -62,29 +67,66 @@
     }
   }
 
+  function normalizeTolerance(ann) {
+    if (!ann.tolerance) ann.tolerance = { ...DEFAULT_TOLERANCE };
+    if (typeof ann.tolerance.radius !== "number") ann.tolerance.radius = DEFAULT_TOLERANCE.radius;
+    if (ann.tolerance.mode !== "polygon") ann.tolerance.mode = "radius";
+  }
+
+  // Abandoning a draw (navigating away, Escape, Cancel) without >=3 points
+  // falls back to radius mode rather than leaving a dangling "polygon" mode
+  // with nothing to show.
+  function cancelDrawing() {
+    if (!state.drawing) return null;
+    const ann = state.annotations.find((a) => a.id === state.drawing.annId);
+    state.drawing = null;
+    stage.classList.remove("drawing-mode");
+    if (ann) {
+      const hasPolygon = Array.isArray(ann.tolerance.polygon) && ann.tolerance.polygon.length >= 3;
+      if (!hasPolygon) ann.tolerance.mode = "radius";
+    }
+    return ann;
+  }
+
   // --- dataset / slice loading --------------------------------------------
 
   async function init() {
-    state.annotations = loadStoredAnnotations();
+    state.annotations = loadStoredAnnotations().map((a) => {
+      const ann = { ...a, id: a.id || uid() };
+      normalizeTolerance(ann);
+      return ann;
+    });
 
     const res = await fetch(MANIFEST_URL);
     state.manifest = await res.json();
     scrub.max = state.manifest.sliceCount;
+    toleranceLayer.setAttribute("viewBox", `0 0 ${state.manifest.size} ${state.manifest.size}`);
     datasetInfo.textContent = `${state.manifest.sliceCount} slices · ${state.manifest.axis || ""}`;
 
     await loadSlice(1);
+    renderGlobalList();
     wireGlobalControls();
   }
 
   async function loadSlice(index) {
     state.currentIndex = index;
+
+    cancelDrawing();
+    if (state.selectedId) {
+      const sel = state.annotations.find((a) => a.id === state.selectedId);
+      if (!sel || sel.sliceIndex !== index) state.selectedId = null;
+    }
+
     const filename = state.manifest.files[index - 1];
     const res = await fetch(SLICE_URL(filename));
     svgHost.innerHTML = await res.text();
     scrub.value = index;
     readout.textContent = `${index} / ${state.manifest.sliceCount}`;
+
     renderMarkers();
+    renderToleranceOverlay();
     renderAnnotationList();
+    renderInspector();
   }
 
   function stopPlaying() {
@@ -93,7 +135,15 @@
     clearInterval(state.playTimer);
   }
 
-  // --- layer detection ------------------------------------------------------
+  async function navigateToAnnotation(id) {
+    const ann = state.annotations.find((a) => a.id === id);
+    if (!ann) return;
+    stopPlaying();
+    if (ann.sliceIndex !== state.currentIndex) await loadSlice(ann.sliceIndex);
+    selectAnnotation(id);
+  }
+
+  // --- layer detection ---------------------------------------------------
 
   function layerFromEventTarget(target) {
     const layerEl = target && target.closest ? target.closest("[data-layer]") : null;
@@ -106,6 +156,35 @@
     const target = document.elementFromPoint(clientX, clientY);
     if (ignoreEl) ignoreEl.style.display = prevDisplay;
     return layerFromEventTarget(target);
+  }
+
+  // --- selection -----------------------------------------------------------
+
+  function selectAnnotation(id) {
+    state.selectedId = id;
+    state.drawing = null;
+    stage.classList.remove("drawing-mode");
+    renderInspector();
+    renderMarkers();
+    renderToleranceOverlay();
+    renderAnnotationList();
+    renderGlobalList();
+  }
+
+  function deselectAnnotation() {
+    if (!state.selectedId && !state.drawing) return;
+    state.selectedId = null;
+    state.drawing = null;
+    stage.classList.remove("drawing-mode");
+    renderInspector();
+    renderMarkers();
+    renderToleranceOverlay();
+    renderAnnotationList();
+    renderGlobalList();
+  }
+
+  function removeAnnotation(id) {
+    state.annotations = state.annotations.filter((a) => a.id !== id);
   }
 
   // --- markers ---------------------------------------------------------------
@@ -121,7 +200,7 @@
 
   function buildMarkerEl(ann) {
     const div = document.createElement("div");
-    div.className = `marker ${ann.type}`;
+    div.className = `marker ${ann.type}` + (ann.id === state.selectedId ? " selected" : "");
     div.style.left = `${ann.x * 100}%`;
     div.style.top = `${ann.y * 100}%`;
     div.dataset.id = ann.id;
@@ -160,6 +239,7 @@
         pendingY = clamp((moveEvt.clientY - rect.top) / rect.height, 0, 1);
         div.style.left = `${pendingX * 100}%`;
         div.style.top = `${pendingY * 100}%`;
+        renderToleranceOverlayThrottled();
       };
 
       const onUp = (upEvt) => {
@@ -171,14 +251,60 @@
           if (newLayer) ann.layer = newLayer;
           persist();
           renderAnnotationList();
+          renderGlobalList();
+          renderToleranceOverlay();
         } else {
-          openEditModal(ann.id);
+          selectAnnotation(ann.id);
         }
       };
 
       div.addEventListener("pointermove", onMove);
       div.addEventListener("pointerup", onUp, { once: true });
     });
+  }
+
+  let toleranceRaf = null;
+  function renderToleranceOverlayThrottled() {
+    if (toleranceRaf) return;
+    toleranceRaf = requestAnimationFrame(() => {
+      toleranceRaf = null;
+      renderToleranceOverlay();
+    });
+  }
+
+  // --- tolerance overlay (radius / custom polygon) ----------------------------
+
+  function toleranceShapeMarkup(ann, size, isSelected) {
+    const t = ann.tolerance;
+    const cls = isSelected ? "tolerance selected" : "tolerance";
+    if (t.mode === "polygon" && t.polygon && t.polygon.length >= 3) {
+      const pts = t.polygon.map((p) => `${(p.x * size).toFixed(1)},${(p.y * size).toFixed(1)}`).join(" ");
+      return `<polygon class="${cls}" points="${pts}" />`;
+    }
+    const r = (t.radius ?? DEFAULT_TOLERANCE.radius) * size;
+    return `<circle class="${cls}" cx="${(ann.x * size).toFixed(1)}" cy="${(ann.y * size).toFixed(1)}" r="${r.toFixed(1)}" />`;
+  }
+
+  function renderToleranceOverlay() {
+    if (!state.manifest) return;
+    const size = state.manifest.size;
+    const parts = [];
+
+    annotationsForCurrentSlice().forEach((ann) => {
+      normalizeTolerance(ann);
+      parts.push(toleranceShapeMarkup(ann, size, ann.id === state.selectedId));
+    });
+
+    if (state.drawing) {
+      const pts = state.drawing.points;
+      if (pts.length) {
+        const ptsAttr = pts.map((p) => `${(p.x * size).toFixed(1)},${(p.y * size).toFixed(1)}`).join(" ");
+        parts.push(`<polyline class="draft-line" points="${ptsAttr}" />`);
+        pts.forEach((p) => parts.push(`<circle class="draft-point" cx="${(p.x * size).toFixed(1)}" cy="${(p.y * size).toFixed(1)}" r="4" />`));
+      }
+    }
+
+    toleranceLayer.innerHTML = parts.join("");
   }
 
   // --- palette drag / drop ----------------------------------------------------
@@ -211,25 +337,44 @@
 
       const ann = createDefaultAnnotation(type, x, y, layer);
       state.annotations.push(ann);
+      persist();
       renderMarkers();
+      renderToleranceOverlay();
       renderAnnotationList();
-      openEditModal(ann.id, { isNew: true });
+      renderGlobalList();
+      selectAnnotation(ann.id);
+    });
+
+    stage.addEventListener("click", (e) => {
+      if (state.drawing) {
+        const rect = stage.getBoundingClientRect();
+        const x = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+        const y = clamp((e.clientY - rect.top) / rect.height, 0, 1);
+        state.drawing.points.push({ x, y });
+        const ann = state.annotations.find((a) => a.id === state.drawing.annId);
+        rebuildToleranceControls(ann);
+        renderToleranceOverlay();
+        return;
+      }
+      if (state.selectedId && !e.target.closest(".marker")) {
+        deselectAnnotation();
+      }
     });
   }
 
   function createDefaultAnnotation(type, x, y, layer) {
-    const base = { id: uid(), type, sliceIndex: state.currentIndex, layer, x, y };
+    const base = { id: uid(), type, sliceIndex: state.currentIndex, layer, x, y, tolerance: { ...DEFAULT_TOLERANCE } };
     if (type === "label") return { ...base, text: "" };
     if (type === "pin") return { ...base, title: "", description: "" };
     return {
       ...base,
       question: "What condition does this point to?",
       options: ["Rot", "Bite mark", "Healthy apple"],
-      answer: "",
+      answer: "Rot",
     };
   }
 
-  // --- annotation list ------------------------------------------------------
+  // --- annotation lists (per-slice + global) ---------------------------------
 
   function summaryFor(ann) {
     if (ann.type === "label") return ann.text || "(empty label)";
@@ -246,7 +391,6 @@
   function renderAnnotationList() {
     const items = annotationsForCurrentSlice();
     sliceAnnCountEl.textContent = items.length;
-    totalAnnCountEl.textContent = state.annotations.length;
     annotationListEl.innerHTML = "";
 
     if (!items.length) {
@@ -259,57 +403,76 @@
 
     items.forEach((ann) => {
       const li = document.createElement("li");
+      if (ann.id === state.selectedId) li.classList.add("active");
       li.innerHTML = `
         ${iconHtmlFor(ann.type)}
         <span class="label-text">${escapeHtml(summaryFor(ann))}</span>
         <span class="layer-tag">${escapeHtml(ann.layer || "—")}</span>
       `;
-      li.addEventListener("click", () => openEditModal(ann.id));
+      li.addEventListener("click", () => selectAnnotation(ann.id));
       annotationListEl.appendChild(li);
     });
   }
 
-  // --- modal editor -----------------------------------------------------------
+  function sortAnnotations(list, order) {
+    const copy = list.slice();
+    if (order === "type") {
+      return copy.sort((a, b) => TYPE_LABELS[a.type].localeCompare(TYPE_LABELS[b.type]) || a.sliceIndex - b.sliceIndex);
+    }
+    if (order === "title-asc") {
+      return copy.sort((a, b) => summaryFor(a).localeCompare(summaryFor(b)));
+    }
+    if (order === "title-desc") {
+      return copy.sort((a, b) => summaryFor(b).localeCompare(summaryFor(a)));
+    }
+    return copy.sort((a, b) => a.sliceIndex - b.sliceIndex);
+  }
 
-  function buildModalForm(ann, isNew) {
-    const meta = `<p class="meta">Slice ${ann.sliceIndex} · layer: ${escapeHtml(ann.layer || "unassigned")}</p>`;
-    const actions = `
-      <div class="modal-actions">
-        ${isNew ? "" : '<button id="deleteBtn" class="danger">Delete</button>'}
-        <div class="right">
-          <button id="cancelBtn">Cancel</button>
-          <button id="saveBtn">Save</button>
-        </div>
-      </div>`;
+  function renderGlobalList() {
+    totalAnnCountEl.textContent = state.annotations.length;
+    const sorted = sortAnnotations(state.annotations, sortOrderEl.value);
+    allAnnotationListEl.innerHTML = "";
 
-    if (ann.type === "label") {
-      return `
-        <h3>${TYPE_LABELS.label}</h3>
-        ${meta}
-        <label>Label text
-          <input type="text" id="f-text" maxlength="40" value="${escapeHtml(ann.text || "")}" placeholder="e.g. Core" />
-        </label>
-        <div class="error" id="formError"></div>
-        ${actions}`;
+    if (!sorted.length) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "No annotations yet.";
+      allAnnotationListEl.appendChild(li);
+      return;
     }
 
+    sorted.forEach((ann) => {
+      const li = document.createElement("li");
+      if (ann.id === state.selectedId) li.classList.add("active");
+      li.innerHTML = `
+        ${iconHtmlFor(ann.type)}
+        <span class="label-text">${escapeHtml(summaryFor(ann))}</span>
+        <span class="slice-tag">#${ann.sliceIndex}</span>
+      `;
+      li.addEventListener("click", () => navigateToAnnotation(ann.id));
+      allAnnotationListEl.appendChild(li);
+    });
+  }
+
+  // --- inspector ---------------------------------------------------------------
+
+  function typeFieldsMarkup(ann) {
+    if (ann.type === "label") {
+      return `
+        <label>Label text
+          <input type="text" id="f-text" maxlength="40" value="${escapeHtml(ann.text || "")}" placeholder="e.g. Core" />
+        </label>`;
+    }
     if (ann.type === "pin") {
       return `
-        <h3>${TYPE_LABELS.pin}</h3>
-        ${meta}
         <label>Title
           <input type="text" id="f-title" maxlength="60" value="${escapeHtml(ann.title || "")}" placeholder="e.g. Seed chamber" />
         </label>
         <label>Description
           <textarea id="f-desc" placeholder="Longer explanation for students">${escapeHtml(ann.description || "")}</textarea>
-        </label>
-        <div class="error" id="formError"></div>
-        ${actions}`;
+        </label>`;
     }
-
     return `
-      <h3>${TYPE_LABELS.mcq}</h3>
-      ${meta}
       <label>Question
         <input type="text" id="f-question" value="${escapeHtml(ann.question || "")}" />
       </label>
@@ -318,112 +481,200 @@
       </label>
       <label>Correct answer
         <select id="f-answer"></select>
-      </label>
-      <div class="error" id="formError"></div>
-      ${actions}`;
+      </label>`;
   }
 
-  function applyFormToAnnotation(ann) {
-    if (ann.type === "label") {
-      const text = el("f-text").value.trim();
-      if (!text) return "Enter label text.";
-      ann.text = text;
-      return null;
+  function toleranceControlsMarkup(ann) {
+    const t = ann.tolerance;
+
+    if (t.mode !== "polygon") {
+      const pct = Math.round((t.radius ?? DEFAULT_TOLERANCE.radius) * 100);
+      return `
+        <label>Radius <span id="radiusReadout">${pct}%</span>
+          <input type="range" id="f-radius" min="2" max="30" step="1" value="${pct}" />
+        </label>
+        <p class="hint">Students must place their answer within this circle of the slice to be marked correct.</p>`;
     }
 
-    if (ann.type === "pin") {
-      const title = el("f-title").value.trim();
-      const description = el("f-desc").value.trim();
-      if (!title) return "Enter a title.";
-      ann.title = title;
-      ann.description = description;
-      return null;
+    const drawing = state.drawing && state.drawing.annId === ann.id;
+    const hasPolygon = t.polygon && t.polygon.length >= 3;
+
+    if (drawing) {
+      const n = state.drawing.points.length;
+      return `
+        <p class="hint drawing">Click on the slice to add points (${n} so far, need at least 3).</p>
+        <div class="tolerance-actions">
+          <button id="undoPointBtn" ${n === 0 ? "disabled" : ""}>Undo point</button>
+          <button id="finishShapeBtn" ${n < 3 ? "disabled" : ""}>Finish shape</button>
+          <button id="cancelDrawBtn">Cancel</button>
+        </div>`;
     }
 
-    const question = el("f-question").value.trim();
-    const options = el("f-options").value.split("\n").map((s) => s.trim()).filter(Boolean);
-    const answer = el("f-answer").value;
-    if (!question) return "Enter a question.";
-    if (options.length < 2) return "Add at least two options.";
-    if (!answer || !options.includes(answer)) return "Choose the correct answer.";
-    ann.question = question;
-    ann.options = options;
-    ann.answer = answer;
-    return null;
+    return `
+      <p class="hint">${hasPolygon ? `Custom shape with ${t.polygon.length} points.` : "No custom shape yet — it doesn't need to surround the pin."}</p>
+      <div class="tolerance-actions">
+        <button id="drawShapeBtn">${hasPolygon ? "Redraw shape" : "Draw shape"}</button>
+      </div>`;
   }
 
-  function removeAnnotation(id) {
-    state.annotations = state.annotations.filter((a) => a.id !== id);
+  function buildInspectorMarkup(ann) {
+    return `
+      <div class="inspector-header">
+        <h2>${TYPE_LABELS[ann.type]}</h2>
+        <button id="closeInspector" title="Close">×</button>
+      </div>
+      <p class="meta">Slice ${ann.sliceIndex} · layer: ${escapeHtml(ann.layer || "unassigned")}</p>
+      ${typeFieldsMarkup(ann)}
+      <div class="tolerance-section">
+        <h3>Acceptable range</h3>
+        <div class="tolerance-mode">
+          <label><input type="radio" name="tolMode" value="radius" ${ann.tolerance.mode !== "polygon" ? "checked" : ""} /> Radius</label>
+          <label><input type="radio" name="tolMode" value="polygon" ${ann.tolerance.mode === "polygon" ? "checked" : ""} /> Custom shape</label>
+        </div>
+        <div id="toleranceControls">${toleranceControlsMarkup(ann)}</div>
+      </div>
+      <div class="inspector-actions">
+        <button id="deleteBtn" class="danger">Delete</button>
+      </div>`;
   }
 
-  function wireModalForm(ann, isNew) {
-    if (ann.type === "mcq") {
-      const optionsTa = el("f-options");
-      const answerSel = el("f-answer");
-      const refreshOptions = () => {
-        const prev = answerSel.value || ann.answer;
-        const lines = optionsTa.value.split("\n").map((s) => s.trim()).filter(Boolean);
-        answerSel.innerHTML = '<option value="">Select…</option>' +
-          lines.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
-        if (lines.includes(prev)) answerSel.value = prev;
-      };
-      optionsTa.addEventListener("input", refreshOptions);
-      refreshOptions();
+  function afterFieldChange() {
+    persist();
+    renderMarkers();
+    renderAnnotationList();
+    renderGlobalList();
+  }
+
+  function rebuildToleranceControls(ann) {
+    el("toleranceControls").innerHTML = toleranceControlsMarkup(ann);
+    bindToleranceControlsInner(ann);
+  }
+
+  function bindToleranceControlsInner(ann) {
+    if (ann.tolerance.mode !== "polygon") {
+      const slider = el("f-radius");
+      const readoutEl = el("radiusReadout");
+      slider.addEventListener("input", () => {
+        ann.tolerance.radius = Number(slider.value) / 100;
+        readoutEl.textContent = `${slider.value}%`;
+        persist();
+        renderToleranceOverlay();
+      });
+      return;
     }
 
-    el("cancelBtn").addEventListener("click", () => {
-      if (isNew) {
-        removeAnnotation(ann.id);
-        renderMarkers();
-        renderAnnotationList();
-      }
-      closeModal();
+    const drawBtn = el("drawShapeBtn");
+    if (drawBtn) {
+      drawBtn.addEventListener("click", () => {
+        state.drawing = { annId: ann.id, points: [] };
+        stage.classList.add("drawing-mode");
+        rebuildToleranceControls(ann);
+        renderToleranceOverlay();
+      });
+    }
+    const undoBtn = el("undoPointBtn");
+    if (undoBtn) {
+      undoBtn.addEventListener("click", () => {
+        state.drawing.points.pop();
+        rebuildToleranceControls(ann);
+        renderToleranceOverlay();
+      });
+    }
+    const finishBtn = el("finishShapeBtn");
+    if (finishBtn) {
+      finishBtn.addEventListener("click", () => {
+        ann.tolerance.polygon = state.drawing.points.slice();
+        ann.tolerance.mode = "polygon";
+        state.drawing = null;
+        stage.classList.remove("drawing-mode");
+        persist();
+        rebuildToleranceControls(ann);
+        renderToleranceOverlay();
+      });
+    }
+    const cancelBtn = el("cancelDrawBtn");
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", () => {
+        cancelDrawing();
+        rebuildToleranceControls(ann);
+        renderToleranceOverlay();
+      });
+    }
+  }
+
+  function wireInspector(ann) {
+    el("closeInspector").addEventListener("click", deselectAnnotation);
+    el("deleteBtn").addEventListener("click", () => {
+      removeAnnotation(ann.id);
+      persist();
+      deselectAnnotation();
+      renderMarkers();
+      renderToleranceOverlay();
+      renderAnnotationList();
+      renderGlobalList();
     });
 
-    const deleteBtn = el("deleteBtn");
-    if (deleteBtn) {
-      deleteBtn.addEventListener("click", () => {
-        removeAnnotation(ann.id);
-        persist();
-        renderMarkers();
-        renderAnnotationList();
-        closeModal();
+    if (ann.type === "label") {
+      el("f-text").addEventListener("input", (e) => {
+        ann.text = e.target.value;
+        afterFieldChange();
+      });
+    } else if (ann.type === "pin") {
+      el("f-title").addEventListener("input", (e) => {
+        ann.title = e.target.value;
+        afterFieldChange();
+      });
+      el("f-desc").addEventListener("input", (e) => {
+        ann.description = e.target.value;
+        afterFieldChange();
+      });
+    } else {
+      el("f-question").addEventListener("input", (e) => {
+        ann.question = e.target.value;
+        afterFieldChange();
+      });
+      const optionsTa = el("f-options");
+      const answerSel = el("f-answer");
+      const refreshOptions = (notify) => {
+        const prev = answerSel.value || ann.answer;
+        const lines = optionsTa.value.split("\n").map((s) => s.trim()).filter(Boolean);
+        answerSel.innerHTML = lines.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
+        answerSel.value = lines.includes(prev) ? prev : lines[0] || "";
+        ann.options = lines;
+        ann.answer = answerSel.value;
+        if (notify) afterFieldChange();
+      };
+      refreshOptions(false);
+      optionsTa.addEventListener("input", () => refreshOptions(true));
+      answerSel.addEventListener("change", () => {
+        ann.answer = answerSel.value;
+        afterFieldChange();
       });
     }
 
-    el("saveBtn").addEventListener("click", () => {
-      const err = applyFormToAnnotation(ann);
-      if (err) {
-        el("formError").textContent = err;
-        return;
-      }
-      persist();
-      renderMarkers();
-      renderAnnotationList();
-      closeModal();
+    document.querySelectorAll('input[name="tolMode"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        if (!radio.checked) return;
+        ann.tolerance.mode = radio.value;
+        persist();
+        rebuildToleranceControls(ann);
+        renderToleranceOverlay();
+      });
     });
+    bindToleranceControlsInner(ann);
   }
 
-  function openEditModal(id, opts = {}) {
-    const ann = state.annotations.find((a) => a.id === id);
-    if (!ann) return;
-    stopPlaying();
-    modal.innerHTML = buildModalForm(ann, !!opts.isNew);
-    modalBackdrop.classList.add("open");
-    wireModalForm(ann, !!opts.isNew);
-  }
-
-  function closeModal() {
-    modalBackdrop.classList.remove("open");
-    modal.innerHTML = "";
+  function renderInspector() {
+    const ann = state.annotations.find((a) => a.id === state.selectedId);
+    if (!ann) {
+      inspectorEl.innerHTML = `<p class="hint placeholder">Select an annotation on the slice, or drag a new one from the palette, to edit it here.</p>`;
+      return;
+    }
+    inspectorEl.innerHTML = buildInspectorMarkup(ann);
+    wireInspector(ann);
   }
 
   // --- import / export / clear -------------------------------------------------
-
-  function stripInternal(ann) {
-    const { _pendingX, _pendingY, ...rest } = ann;
-    return rest;
-  }
 
   function wireGlobalControls() {
     wirePalette();
@@ -447,6 +698,8 @@
       }, 300);
     });
 
+    sortOrderEl.addEventListener("change", renderGlobalList);
+
     exportBtn.addEventListener("click", () => {
       const payload = {
         version: 1,
@@ -455,7 +708,7 @@
           sliceCount: state.manifest.sliceCount,
           axis: state.manifest.axis,
         },
-        annotations: state.annotations.map(stripInternal),
+        annotations: state.annotations,
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -477,10 +730,17 @@
         const parsed = JSON.parse(await file.text());
         if (!parsed || !Array.isArray(parsed.annotations)) throw new Error("Missing annotations array");
         if (state.annotations.length && !confirm("Replace current annotations with the imported file?")) return;
-        state.annotations = parsed.annotations.map((a) => ({ ...a, id: a.id || uid() }));
+        state.annotations = parsed.annotations.map((a) => {
+          const ann = { ...a, id: a.id || uid() };
+          normalizeTolerance(ann);
+          return ann;
+        });
+        deselectAnnotation();
         persist();
         renderMarkers();
+        renderToleranceOverlay();
         renderAnnotationList();
+        renderGlobalList();
       } catch (err) {
         alert("Could not import file: " + err.message);
       } finally {
@@ -492,17 +752,23 @@
       if (!state.annotations.length) return;
       if (!confirm("Delete all annotations across every slice? This cannot be undone.")) return;
       state.annotations = [];
+      deselectAnnotation();
       persist();
       renderMarkers();
+      renderToleranceOverlay();
       renderAnnotationList();
-    });
-
-    modalBackdrop.addEventListener("click", (e) => {
-      if (e.target === modalBackdrop) el("cancelBtn")?.click();
+      renderGlobalList();
     });
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && modalBackdrop.classList.contains("open")) el("cancelBtn")?.click();
+      if (e.key !== "Escape") return;
+      if (state.drawing) {
+        cancelDrawing();
+        renderInspector();
+        renderToleranceOverlay();
+      } else if (state.selectedId) {
+        deselectAnnotation();
+      }
     });
   }
 
