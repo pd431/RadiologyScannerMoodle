@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Annotator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Annotator</h1>
+    <div class="dataset-info" id="datasetInfo">Loading dataset…</div>
+    <div class="actions">
+      <button id="importBtn">Import…</button>
+      <input type="file" id="importFile" accept="application/json" hidden />
+      <button id="exportBtn">Export annotations</button>
+      <button id="clearBtn" class="danger">Clear all</button>
+    </div>
+  </header>
+
+  <main>
+    <aside class="side-panel">
+      <section>
+        <h2>Add annotation</h2>
+        <p class="hint">Drag a type onto the slice, then drop it on the feature you want to mark.</p>
+        <div class="palette">
+          <div class="palette-item" draggable="true" data-type="label">
+            <span class="icon label"></span>
+            <div>
+              <strong>Text label</strong>
+              <span>Short label shown right on the image</span>
+            </div>
+          </div>
+          <div class="palette-item" draggable="true" data-type="pin">
+            <span class="icon pin">i</span>
+            <div>
+              <strong>Pin + description</strong>
+              <span>Marker with a longer write-up</span>
+            </div>
+          </div>
+          <div class="palette-item" draggable="true" data-type="mcq">
+            <span class="icon mcq">?</span>
+            <div>
+              <strong>MCQ</strong>
+              <span>Marker with a multiple-choice question</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>On this slice <span class="count" id="sliceAnnCount">0</span></h2>
+        <ul class="annotation-list" id="annotationList"></ul>
+      </section>
+
+      <section>
+        <h2>All slices <span class="count" id="totalAnnCount">0</span></h2>
+      </section>
+    </aside>
+
+    <section class="stage-panel">
+      <div class="stage-wrap">
+        <div class="stage" id="stage">
+          <div class="svg-host" id="svgHost"></div>
+          <div class="marker-layer" id="markerLayer"></div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="play">Play</button>
+        <input id="scrub" type="range" min="1" value="1" step="1" />
+        <span class="readout" id="readout">1 / ?</span>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
