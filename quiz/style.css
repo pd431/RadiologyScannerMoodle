@@ -290,16 +290,24 @@ details[open] > summary { margin-bottom: 0.6rem; }
 .marker.selected .dot,
 .marker.selected .icon-circle { outline: 2px solid #fff; outline-offset: 2px; }
 
-/* Student guess markers: neutral blue until checked, then green/red */
-.marker.mine.outcome-correct .dot,
-.marker.mine.outcome-correct .icon-circle { background: #3ecf8e; border-color: #1f7a53; }
-.marker.mine.outcome-incorrect .dot,
-.marker.mine.outcome-incorrect .icon-circle { background: #e2564a; border-color: #8f2c23; }
-
 /* Showcase markers: reuse the annotator's type colors since nothing is hidden */
 .marker.showcase.label .dot { background: #3ecf8e; border-color: #1f7a53; }
 .marker.showcase.pin .icon-circle { background: #e8b93a; border-color: #8a6a10; color: #3a2c05; }
 .marker.showcase.mcq .icon-circle { background: #9b7fe0; border-color: #5a3fa0; color: #23163f; }
+
+/* MCQs are always shown at their true spot rather than placed by the
+   student (see app.js) - purple like showcase until answered. */
+.marker.mcq-fixed { display: flex; align-items: center; cursor: pointer; }
+.marker.mcq-fixed .icon-circle { background: #9b7fe0; border-color: #5a3fa0; color: #23163f; }
+
+/* Student guess markers (label/pin) and answered MCQs: neutral blue until
+   checked, then green/red. Listed after the type-specific defaults above
+   so these outcome classes win regardless of marker type. */
+.marker.outcome-pending .icon-circle { background: #5b8def; border-color: #2d4f8a; color: #0d1a33; }
+.marker.outcome-correct .dot,
+.marker.outcome-correct .icon-circle { background: #3ecf8e; border-color: #1f7a53; }
+.marker.outcome-incorrect .dot,
+.marker.outcome-incorrect .icon-circle { background: #e2564a; border-color: #8f2c23; }
 
 .controls { display: flex; align-items: center; gap: 0.75rem; width: 100%; }
 .slider-wrap { flex: 1; display: flex; flex-direction: column; gap: 3px; }

@@ -132,20 +132,26 @@ with the correct one highlighted.
 
 **Quiz files** show a "To place" list built from each annotation's
 public-safe prompt (a label's text, a pin's title, an MCQ's question +
-options) — never its slice or position. Tap an item (it "arms"), then
-tap the slice where you think it belongs — or press-and-drag it onto
-the stage, same as the annotator's palette. MCQs also get a dropdown
-to pick an answer. Placed items can be dragged to reposition, or
-re-opened from the list to review or clear. In **guided** exports,
-small dots below the slider hint which slice each item belongs to
-(the currently-selected item's dot is highlighted); a separate row of
-dots always shows which slices you've placed something on, regardless
-of mode.
+options) — never its slice or position. Tap a label/pin item (it
+"arms"), then tap the slice where you think it belongs — or
+press-and-drag it onto the stage, same as the annotator's palette.
+Placed items can be dragged to reposition, or re-opened from the list
+to review or clear. In **guided** exports, small dots below the slider
+hint which slice each label/pin item belongs to (the currently-selected
+item's dot is highlighted); a separate row of dots always shows which
+slices you've placed something on.
 
-Status icons in the list track each item: empty ring (not placed),
-filled dot (placed, not yet checked), green check / red cross (graded).
-**Check my answers** grades every item at once — correct requires the
-right slice *and* landing inside the annotation's acceptable range
-(circle or custom polygon), plus the right dropdown choice for MCQs —
-and reveals the true location/content for anything attempted. **Try
-again** clears every placement and re-attempts from scratch.
+**MCQs work differently, regardless of quiz mode**: an MCQ is a
+question about a specific spot, not a test of whether you can find it,
+so it's always shown already sitting at its true location and slice —
+clicking it in the list jumps straight there (a slider hint for it
+always shows too, even in *full challenge* exports) and all you do is
+pick an answer from the dropdown.
+
+Status icons in the list track each item: empty ring (not
+placed/answered), filled dot (attempted, not yet checked), green check
+/ red cross (graded). **Check my answers** grades every item at once —
+label/pin: right slice *and* landing inside the annotation's
+acceptable range (circle or custom polygon); MCQ: right dropdown
+choice — and reveals the true location/content for anything attempted.
+**Try again** clears every attempt and starts over.

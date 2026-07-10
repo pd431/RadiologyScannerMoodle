@@ -116,9 +116,10 @@
     scoreSummaryEl.textContent = "";
 
     if (data.exportMode === "quiz") {
-      modeHintEl.textContent = data.quizMode === "guided"
+      const base = data.quizMode === "guided"
         ? "Tap an item, then tap the slice where you think it belongs. Small markers on the slider below show which slice each item is on."
         : "Tap an item, then tap the slice where you think it belongs — you'll need to find the right slice yourself.";
+      modeHintEl.textContent = `${base} MCQ items are already placed for you — just open one and choose an answer.`;
     }
 
     await loadSlice(1);
@@ -187,11 +188,17 @@
         t.outcome = null;
         return;
       }
+      if (t.type === "mcq") {
+        // MCQs are always shown at their true spot (see renderMarkers) -
+        // the question is about identifying the condition, not finding the
+        // point, so only the chosen answer is graded.
+        t.outcome = t.studentChoice === t.answer ? "correct" : "incorrect";
+        return;
+      }
       const posOk = !!t.studentAnswer &&
         t.studentAnswer.sliceIndex === t.sliceIndex &&
         isWithinTolerance(t, t.studentAnswer.x, t.studentAnswer.y);
-      const mcqOk = t.type !== "mcq" || t.studentChoice === t.answer;
-      t.outcome = posOk && mcqOk ? "correct" : "incorrect";
+      t.outcome = posOk ? "correct" : "incorrect";
     });
     state.checked = true;
     resetBtn.hidden = false;
@@ -239,17 +246,20 @@
 
     const count = state.manifest.sliceCount;
     const fracFor = (idx) => (count > 1 ? (idx - 1) / (count - 1) : 0);
+    const guided = state.quiz.quizMode === "guided";
 
-    if (state.quiz.quizMode === "guided") {
-      state.targets.forEach((t) => {
-        const tick = document.createElement("div");
-        tick.className = "tick" + (t.id === state.selectedId ? " active" : "");
-        tick.style.left = `${fracFor(t.sliceIndex) * 100}%`;
-        hintTicksEl.appendChild(tick);
-      });
-    }
+    // MCQs are always shown at their true slice (the question is about the
+    // spot, not finding it), so their hint always shows; label/pin hints
+    // only show in guided exports.
+    state.targets.forEach((t) => {
+      if (t.type !== "mcq" && !guided) return;
+      const tick = document.createElement("div");
+      tick.className = "tick" + (t.id === state.selectedId ? " active" : "");
+      tick.style.left = `${fracFor(t.sliceIndex) * 100}%`;
+      hintTicksEl.appendChild(tick);
+    });
 
-    const placedSlices = new Set(state.targets.filter((t) => t.studentAnswer).map((t) => t.studentAnswer.sliceIndex));
+    const placedSlices = new Set(state.targets.filter((t) => t.type !== "mcq" && t.studentAnswer).map((t) => t.studentAnswer.sliceIndex));
     placedSlices.forEach((idx) => {
       const tick = document.createElement("div");
       tick.className = "tick";
@@ -278,7 +288,9 @@
 
     if (state.quiz.exportMode === "quiz" && state.checked) {
       state.targets.forEach((t) => {
-        if (t.sliceIndex !== state.currentIndex) return;
+        // MCQs are always shown at their true spot (see renderMarkers) -
+        // no separate reveal/tolerance zone needed for them.
+        if (t.type === "mcq" || t.sliceIndex !== state.currentIndex) return;
         parts.push(toleranceShapeMarkup(t, size, t.id === state.selectedId));
         parts.push(`<circle class="reveal-dot" cx="${(t.x * size).toFixed(1)}" cy="${(t.y * size).toFixed(1)}" r="5" />`);
       });
@@ -306,10 +318,33 @@
     }
 
     state.targets.forEach((t) => {
+      // MCQs ask about a specific spot rather than testing whether the
+      // student can find it, so they're always shown at their true
+      // location/slice - the student's job is just to pick the right
+      // answer, not to place a marker.
+      if (t.type === "mcq") {
+        if (t.sliceIndex === state.currentIndex) markerLayer.appendChild(buildMcqMarkerEl(t));
+        return;
+      }
       if (t.studentAnswer && t.studentAnswer.sliceIndex === state.currentIndex) {
         markerLayer.appendChild(buildGuessMarkerEl(t));
       }
     });
+  }
+
+  function buildMcqMarkerEl(t) {
+    const div = document.createElement("div");
+    const outcomeCls = t.outcome ? ` outcome-${t.outcome}` : t.studentChoice ? " outcome-pending" : "";
+    div.className = `marker mcq-fixed${outcomeCls}` + (t.id === state.selectedId ? " selected" : "");
+    div.style.left = `${t.x * 100}%`;
+    div.style.top = `${t.y * 100}%`;
+    div.title = t.question || "MCQ";
+    div.innerHTML = `<span class="icon-circle">?</span>`;
+    div.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectTarget(t.id);
+    });
+    return div;
   }
 
   function buildShowcaseMarkerEl(t) {
@@ -482,8 +517,11 @@
     if (!t) return;
     stopPlaying();
     setArmed(null);
-    if (t.studentAnswer && t.studentAnswer.sliceIndex !== state.currentIndex) {
-      await loadSlice(t.studentAnswer.sliceIndex);
+    // MCQs are always shown at their true slice; other types navigate to
+    // wherever the student placed their guess (if anywhere).
+    const targetSlice = t.type === "mcq" ? t.sliceIndex : t.studentAnswer && t.studentAnswer.sliceIndex;
+    if (targetSlice && targetSlice !== state.currentIndex) {
+      await loadSlice(targetSlice);
     }
     selectTarget(id);
   }
@@ -559,10 +597,22 @@
     const header = `<div class="inspector-header"><h2>${TYPE_LABELS[t.type]}</h2><button id="closeInspector" title="Close">×</button></div>`;
     const prompt = `<p class="prompt">${escapeHtml(summaryFor(t))}</p>`;
 
-    let mcqBlock = "";
     if (t.type === "mcq") {
       const opts = (t.options || []).map((o) => `<option value="${escapeHtml(o)}" ${o === t.studentChoice ? "selected" : ""}>${escapeHtml(o)}</option>`).join("");
-      mcqBlock = `<label>Your answer<select id="f-choice"><option value="">Choose…</option>${opts}</select></label>`;
+      const mcqBlock = `<p class="meta">On slice ${t.sliceIndex} — already placed for you.</p>` +
+        `<label>Your answer<select id="f-choice"><option value="">Choose…</option>${opts}</select></label>`;
+
+      let outcomeBlock = "";
+      if (state.checked) {
+        const attempted = isAttempted(t);
+        const cls = t.outcome === "correct" ? "correct" : attempted ? "incorrect" : "pending";
+        const text = t.outcome === "correct" ? "Correct!" : attempted ? "Not quite" : "Not attempted";
+        outcomeBlock = `<div class="outcome-banner ${cls}">${text}</div>`;
+        if (attempted) {
+          outcomeBlock += `<div class="reveal-section"><h3>Reveal</h3><p>Correct answer: <strong>${escapeHtml(t.answer || "")}</strong></p></div>`;
+        }
+      }
+      return `${header}${prompt}${mcqBlock}${outcomeBlock}`;
     }
 
     let placementBlock;
@@ -581,12 +631,11 @@
       if (attempted) {
         let reveal = `<p class="meta">Correct slice: ${t.sliceIndex}</p>`;
         if (t.type === "pin") reveal += `<p>${escapeHtml(t.description || "")}</p>`;
-        if (t.type === "mcq") reveal += `<p>Correct answer: <strong>${escapeHtml(t.answer || "")}</strong></p>`;
         outcomeBlock += `<div class="reveal-section"><h3>Reveal</h3>${reveal}</div>`;
       }
     }
 
-    return `${header}${prompt}${mcqBlock}${placementBlock}${outcomeBlock}`;
+    return `${header}${prompt}${placementBlock}${outcomeBlock}`;
   }
 
   function wireInspector(t) {
@@ -598,6 +647,7 @@
         t.studentChoice = choiceSel.value || null;
         t.outcome = null;
         renderTargetsList();
+        renderMarkers();
       });
     }
 
@@ -708,23 +758,24 @@
       if (state.selectedId && !e.target.closest(".marker")) deselect();
     });
 
-    // Already-placed items just navigate on a plain click (no drag needed -
-    // repositioning happens via the marker on the stage instead). Unplaced
-    // items go through the pointerdown-based drag-or-arm interaction below;
-    // splitting on placement state avoids both mechanisms firing for the
-    // same tap.
+    // MCQs and already-placed items just navigate on a plain click (no
+    // drag needed - MCQs are always shown at their true spot, and
+    // repositioning a placed guess happens via its marker on the stage
+    // instead). Unplaced label/pin items go through the pointerdown-based
+    // drag-or-arm interaction below; splitting on this avoids both
+    // mechanisms firing for the same tap.
     targetsListEl.addEventListener("click", (e) => {
       const li = e.target.closest("li[data-id]");
       if (!li) return;
       const t = state.targets.find((x) => x.id === li.dataset.id);
-      if (t && t.studentAnswer) navigateToTarget(t.id);
+      if (t && (t.type === "mcq" || t.studentAnswer)) navigateToTarget(t.id);
     });
 
     targetsListEl.addEventListener("pointerdown", (e) => {
       const li = e.target.closest("li[data-id]");
       if (!li) return;
       const t = state.targets.find((x) => x.id === li.dataset.id);
-      if (!t || t.studentAnswer) return;
+      if (!t || t.type === "mcq" || t.studentAnswer) return;
       if (e.pointerType === "mouse" && e.button !== 0) return;
       e.preventDefault();
       beginTargetInteraction(li, e, t);
