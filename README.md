@@ -13,12 +13,20 @@ hosted as-is (e.g. as a Moodle-embeddable static page).
 
 ## Dataset
 
-`data/slices/` contains a placeholder "MRI-like" slice stack: each
-slice is an SVG with three nested polygons (hexagon / square /
-triangle) that each rotate at their own rate as the slice index
-increases, plus a fixed landmark dot for orientation. It's a stand-in
-for real cross-sectional anatomy, good enough to build and test the
-annotation/quiz tools against.
+`data/slices/` contains a placeholder "apple cross-section" slice
+stack: each slice is a horizontal cut through an apple, scanned bottom
+to top. The outer silhouette starts small at the base, grows to its
+widest at the equator, then narrows toward the stem; a star-shaped
+core with 5 seed pockets fades in and out around the middle; a calyx
+dimple shows at the very bottom slices and a stem nub at the very top
+ones. A shape that visibly grows/shrinks with height reads much more
+naturally as "moving through a volume" than an abstract rotating
+polygon did — it's a stand-in for real cross-sectional anatomy, good
+enough to build and test the annotation/quiz tools against.
+
+Layers per slice (see `data-layer` attribute in each SVG, and
+`manifest.json`): `skin`, `flesh`, `core`, `seed`, `stem`, `calyx` —
+the last two only appear near the top/bottom of the stack.
 
 Regenerate it with:
 
