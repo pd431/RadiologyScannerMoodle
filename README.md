@@ -41,6 +41,33 @@ ids/labels, file list).
 Open `preview.html` (served over HTTP, e.g. `python3 -m http.server`)
 to scrub through the generated stack.
 
+### Using your own images instead
+
+The slice list always comes from `data/slices/manifest.json`, but you
+don't need to hand-edit it — `manifest.json`'s `files` list is just a
+scan of the folder, sorted alphabetically by filename (case-insensitive).
+Drop in your own `.svg`, `.png`, `.jpg`/`.jpeg`, `.gif` or `.webp`
+images (filenames can have spaces), then run:
+
+```
+python3 scripts/build_manifest.py
+```
+
+to rebuild the index from whatever's actually in the folder — it
+leaves the images themselves untouched and only refreshes the file
+list, so it's safe to run alongside (or instead of) the apple
+generator above. Zero-pad any numbers in your filenames (`slice-01`,
+`slice-02`, … `slice-10`) if you want them in numeric rather than
+plain alphabetical order (`slice-10` otherwise sorts before `slice-2`).
+
+Non-SVG images are shown as plain pictures — layer auto-detection in
+the annotator (which relies on `data-layer` attributes on SVG shapes)
+just won't find a layer for them, which is already handled gracefully
+(the annotation is simply left unassigned). For annotation coordinates
+to line up consistently across the whole stack, images should ideally
+share the same dimensions/aspect ratio, matching how real scan slices
+from one series are usually exported.
+
 ## Annotator (`annotator/`)
 
 The educator-facing tool. Works on desktop, iPad and phones — the

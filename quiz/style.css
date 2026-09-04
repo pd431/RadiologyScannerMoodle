@@ -219,6 +219,7 @@ details[open] > summary { margin-bottom: 0.6rem; }
 
 .svg-host { width: 100%; height: 100%; }
 .svg-host svg { width: 100%; height: 100%; display: block; }
+.svg-host img { width: 100%; height: 100%; display: block; object-fit: contain; }
 
 .tolerance-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .tolerance-layer .tolerance {

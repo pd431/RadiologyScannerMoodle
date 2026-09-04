@@ -15,9 +15,12 @@ Run: python3 scripts/generate_slices.py
 Output: data/slices/slice-NNN.svg + data/slices/manifest.json
 """
 
-import json
 import math
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
+from lib_manifest import build_manifest  # noqa: E402
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "slices")
 SIZE = 400
@@ -187,9 +190,17 @@ def render_slice(t):
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    manifest = {
+    for i in range(SLICE_COUNT):
+        t = i / (SLICE_COUNT - 1)
+        filename = f"slice-{i + 1:03d}.svg"
+        with open(os.path.join(OUT_DIR, filename), "w") as f:
+            f.write(render_slice(t))
+
+    # Rebuilding from a directory scan (rather than just the files this
+    # run wrote) means any other images already sitting in OUT_DIR are
+    # picked up too, alphabetically alongside the generated ones.
+    manifest = build_manifest(OUT_DIR, overrides={
         "size": SIZE,
-        "sliceCount": SLICE_COUNT,
         "axis": "height, bottom to top",
         "layers": [
             {"id": "skin", "label": "Skin"},
@@ -199,21 +210,9 @@ def main():
             {"id": "stem", "label": "Stem"},
             {"id": "calyx", "label": "Calyx (blossom end)"},
         ],
-        "files": [],
-    }
+    })
 
-    for i in range(SLICE_COUNT):
-        t = i / (SLICE_COUNT - 1)
-        filename = f"slice-{i + 1:03d}.svg"
-        with open(os.path.join(OUT_DIR, filename), "w") as f:
-            f.write(render_slice(t))
-        manifest["files"].append(filename)
-
-    with open(os.path.join(OUT_DIR, "manifest.json"), "w") as f:
-        json.dump(manifest, f, indent=2)
-        f.write("\n")
-
-    print(f"Wrote {SLICE_COUNT} slices + manifest.json to {os.path.abspath(OUT_DIR)}")
+    print(f"Wrote {SLICE_COUNT} apple slices; manifest.json now lists {manifest['sliceCount']} image(s) total from {os.path.abspath(OUT_DIR)}")
 
 
 if __name__ == "__main__":

@@ -68,7 +68,7 @@
     let timer = null;
 
     function show(index) {
-      frame.src = `data/slices/${manifest.files[index - 1]}`;
+      frame.src = `data/slices/${encodeURIComponent(manifest.files[index - 1])}`;
       readout.textContent = `${index} / ${manifest.sliceCount}`;
       scrub.value = index;
     }

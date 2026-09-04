@@ -1,6 +1,7 @@
 (() => {
   const MANIFEST_URL = "../data/slices/manifest.json";
-  const SLICE_URL = (filename) => `../data/slices/${filename}`;
+  const SLICE_URL = (filename) => `../data/slices/${encodeURIComponent(filename)}`;
+  const isSvgFilename = (filename) => /\.svg$/i.test(filename);
   const STORAGE_KEY = "annotator:apple:v2";
   const TYPE_LABELS = { label: "Text label", pin: "Pin + description", mcq: "MCQ" };
   const DEFAULT_TOLERANCE = { mode: "radius", radius: 0.06 };
@@ -111,6 +112,26 @@
     wireGlobalControls();
   }
 
+  // SVGs are fetched and injected inline so their shapes are real DOM
+  // elements - that's what makes layer detection (elementFromPoint +
+  // data-layer) possible. Any other image format (a real scan export -
+  // PNG/JPG/etc.) is just rendered as a plain <img>; layer detection then
+  // naturally finds nothing, which the rest of the app already treats as
+  // "no layer" rather than an error.
+  async function loadSliceImage(filename) {
+    svgHost.innerHTML = "";
+    if (isSvgFilename(filename)) {
+      const res = await fetch(SLICE_URL(filename));
+      svgHost.innerHTML = await res.text();
+      return;
+    }
+    const img = document.createElement("img");
+    img.src = SLICE_URL(filename);
+    img.alt = "";
+    img.draggable = false;
+    svgHost.appendChild(img);
+  }
+
   async function loadSlice(index) {
     state.currentIndex = index;
 
@@ -121,8 +142,7 @@
     }
 
     const filename = state.manifest.files[index - 1];
-    const res = await fetch(SLICE_URL(filename));
-    svgHost.innerHTML = await res.text();
+    await loadSliceImage(filename);
     scrub.value = index;
     readout.textContent = `${index} / ${state.manifest.sliceCount}`;
 

@@ -1,6 +1,7 @@
 (() => {
   const MANIFEST_URL = "../data/slices/manifest.json";
-  const SLICE_URL = (filename) => `../data/slices/${filename}`;
+  const SLICE_URL = (filename) => `../data/slices/${encodeURIComponent(filename)}`;
+  const isSvgFilename = (filename) => /\.svg$/i.test(filename);
   const DEFAULT_EXPORT_URL = "annotations.json";
   const TYPE_LABELS = { label: "Text label", pin: "Pin + description", mcq: "MCQ" };
   const DEFAULT_TOLERANCE = { mode: "radius", radius: 0.06 };
@@ -128,6 +129,23 @@
     renderTicks();
   }
 
+  // SVGs are fetched and injected inline so their shapes are real DOM
+  // elements; any other image format (a real scan export - PNG/JPG/etc.)
+  // is just rendered as a plain <img>.
+  async function loadSliceImage(filename) {
+    svgHost.innerHTML = "";
+    if (isSvgFilename(filename)) {
+      const res = await fetch(SLICE_URL(filename));
+      svgHost.innerHTML = await res.text();
+      return;
+    }
+    const img = document.createElement("img");
+    img.src = SLICE_URL(filename);
+    img.alt = "";
+    img.draggable = false;
+    svgHost.appendChild(img);
+  }
+
   async function loadSlice(index) {
     state.currentIndex = index;
     if (state.selectedId) {
@@ -140,8 +158,7 @@
     }
 
     const filename = state.manifest.files[index - 1];
-    const res = await fetch(SLICE_URL(filename));
-    svgHost.innerHTML = await res.text();
+    await loadSliceImage(filename);
     scrub.value = index;
     readout.textContent = `${index} / ${state.manifest.sliceCount}`;
 
