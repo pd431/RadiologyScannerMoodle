@@ -48,9 +48,11 @@ to scrub through the generated stack.
 
 The slice list always comes from `data/slices/manifest.json`, but you
 don't need to hand-edit it — `manifest.json`'s `files` list is just a
-scan of the folder, sorted alphabetically by filename (case-insensitive).
-Drop in your own `.svg`, `.png`, `.jpg`/`.jpeg`, `.gif` or `.webp`
-images (filenames can have spaces), then run:
+scan of the folder, sorted naturally by filename (case-insensitive,
+and numbers inside the name sort numerically — `abc2.jpg` before
+`abc10.jpg` whether or not you zero-pad). Drop in your own `.svg`,
+`.png`, `.jpg`/`.jpeg`, `.gif` or `.webp` images (filenames can have
+spaces), then run:
 
 ```
 python3 scripts/build_manifest.py
@@ -59,9 +61,7 @@ python3 scripts/build_manifest.py
 to rebuild the index from whatever's actually in the folder — it
 leaves the images themselves untouched and only refreshes the file
 list, so it's safe to run alongside (or instead of) the apple
-generator above. Zero-pad any numbers in your filenames (`slice-01`,
-`slice-02`, … `slice-10`) if you want them in numeric rather than
-plain alphabetical order (`slice-10` otherwise sorts before `slice-2`).
+generator above.
 
 Non-SVG images are shown as plain pictures — layer auto-detection in
 the annotator (which relies on `data-layer` attributes on SVG shapes)

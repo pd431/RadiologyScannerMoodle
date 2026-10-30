@@ -3,9 +3,10 @@
 actually sitting in data/slices/.
 
 Drop images in (.svg, .png, .jpg, .jpeg, .gif, .webp - names can have
-spaces), run this, and they become the slice list, alphabetically by
-filename. Existing size/axis/layers metadata in manifest.json is left
-as-is; only the file list is refreshed from the directory.
+spaces), run this, and they become the slice list, naturally sorted
+by filename (abc2.jpg before abc10.jpg, zero-padded or not). Existing
+size/axis/layers metadata in manifest.json is left as-is; only the
+file list is refreshed from the directory.
 
 Run: python3 scripts/build_manifest.py
 """

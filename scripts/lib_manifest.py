@@ -1,5 +1,7 @@
 """Shared helper: scan data/slices/ for image files and (re)write
-manifest.json from whatever is actually there, sorted alphabetically.
+manifest.json from whatever is actually there, sorted naturally (the
+way a person reading filenames alphabetically-with-numbers would
+expect, e.g. abc1 < abc2 < abc10, zero-padded or not).
 
 Used by both generate_slices.py (the apple sample dataset) and
 build_manifest.py (for rebuilding the index after manually adding,
@@ -8,22 +10,37 @@ removing, or renaming images in the folder).
 
 import json
 import os
+import re
 
 IMAGE_EXTENSIONS = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 DEFAULTS = {"size": 400, "axis": "", "layers": []}
 
+_NUMBER_RUN = re.compile(r"(\d+)")
+
+
+def _natural_sort_key(name):
+    """Split into text/number chunks so digit runs compare as integers
+    (abc2 < abc10) instead of as strings (abc10 < abc2), while text
+    chunks still compare case-insensitively. re.split with a single
+    capture group always alternates text, digits, text, digits, ...,
+    so a given position is consistently str or consistently int across
+    every filename - safe to compare without type errors."""
+    return [
+        int(chunk) if chunk.isdigit() else chunk.lower()
+        for chunk in _NUMBER_RUN.split(name)
+    ]
+
 
 def scan_slice_files(slices_dir):
-    """Image filenames in slices_dir, sorted the way a person reading
-    them alphabetically would expect (case-insensitive). Zero-pad any
-    numbers in your filenames (01, 02, ... 10) if you want numeric
-    order - plain alphabetical sorts "10" before "2"."""
+    """Image filenames in slices_dir, naturally sorted (see
+    _natural_sort_key) - "abc1.jpg, abc2.jpg, ..., abc10.jpg" sorts in
+    that numeric order with no need to zero-pad."""
     names = [
         f for f in os.listdir(slices_dir)
         if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS
     ]
-    return sorted(names, key=str.lower)
+    return sorted(names, key=_natural_sort_key)
 
 
 def build_manifest(slices_dir, overrides=None):
