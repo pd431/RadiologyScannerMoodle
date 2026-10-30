@@ -11,6 +11,9 @@ no server-side storage) built around a stack of sliced scan images:
 Everything the site needs is just files in this folder — it can be
 hosted as-is (e.g. as a Moodle-embeddable static page).
 
+See **[guide.html](guide.html)** for a short, task-oriented walkthrough
+of both tools — this README is the fuller technical reference.
+
 ## Dataset
 
 `data/slices/` contains a placeholder "apple cross-section" slice

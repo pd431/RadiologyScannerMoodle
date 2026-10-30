@@ -40,6 +40,17 @@ button {
 button:hover { background: #262f42; }
 button.danger { border-color: #5a2a2a; color: #ffb4b4; }
 button.danger:hover { background: #351c1c; }
+.guide-link {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #333c4d;
+  border-radius: 6px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+  color: #8fb3ff;
+  text-decoration: none;
+}
+.guide-link:hover { background: #262f42; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 main {
